@@ -413,7 +413,10 @@ class FinancialAgent:
         # 1. Affordable now
         if safe_to_pay >= req_amt - 1e-4 and 'full_payment' in allowed_methods:
             amt_formatted = clean_amt_str(req_amt)
-            explanation = f"Pay {home_curr} {req_amt:,.2f} today. This leaves at least {home_curr} {min_keep:,.2f} available over the next 90 days."
+            explanation = (
+                f"Pay {home_curr} {req_amt:,.2f} today. "
+                f"This leaves at least {home_curr} {min_keep:,.2f} available over the next 90 days."
+            )
             return {
                 'request_id': req_id,
                 'amount_safe_to_pay': safe_to_pay,
@@ -468,7 +471,10 @@ class FinancialAgent:
                         'num_payments': 1,
                         'option_id': 'change_full',
                         'status': 'affordable_with_plan',
-                        'explanation': f"{action_desc}, then pay {home_curr} {req_amt:,.2f} today. This leaves at least {home_curr} {min_keep:,.2f} available."
+                        'explanation': (
+                            f"{action_desc}, then pay {home_curr} {req_amt:,.2f} today. "
+                            f"This leaves at least {home_curr} {min_keep:,.2f} available."
+                        )
                     })
                     break
 
@@ -497,7 +503,10 @@ class FinancialAgent:
                                 'num_payments': 1,
                                 'option_id': 'change_full',
                                 'status': 'affordable_with_plan',
-                                'explanation': f"Adjust flexible expenses, then pay {home_curr} {req_amt:,.2f} today. This leaves at least {home_curr} {min_keep:,.2f} available."
+                                'explanation': (
+                                    f"Adjust flexible expenses, then pay {home_curr} {req_amt:,.2f} today. "
+                                    f"This leaves at least {home_curr} {min_keep:,.2f} available."
+                                )
                             })
                             break
                     if candidate_plans:
@@ -520,7 +529,10 @@ class FinancialAgent:
                     'num_payments': 2,
                     'option_id': 'partial',
                     'status': 'affordable_with_plan',
-                    'explanation': f"Pay {home_curr} {part1:,.2f} today and the remaining {home_curr} {part2:,.2f} on {earliest_full}. This completes the full request and keeps the {home_curr} {min_keep:,.2f} minimum protected."
+                    'explanation': (
+                        f"Pay {home_curr} {part1:,.2f} today and the remaining {home_curr} {part2:,.2f} on {earliest_full}. "
+                        f"This completes the full request and keeps the {home_curr} {min_keep:,.2f} minimum protected."
+                    )
                 })
 
         # 4. Candidate: Installments
@@ -560,7 +572,11 @@ class FinancialAgent:
                         'num_payments': num_p,
                         'option_id': opt['payment_option_id'],
                         'status': 'affordable_with_plan',
-                        'explanation': f"Use {num_p} installments of {home_curr} {p_amt:,.2f}, starting {first_dt.strftime('%d %B %Y')}. This leaves at least {home_curr} {min_keep:,.2f} available."
+                        'explanation': (
+                            f"Use {num_p} installments of {home_curr} {p_amt:,.2f}, "
+                            f"starting {first_dt.strftime('%d %B %Y')}. "
+                            f"This leaves at least {home_curr} {min_keep:,.2f} available."
+                        )
                     })
 
         # Rank candidate plans
@@ -602,7 +618,10 @@ class FinancialAgent:
                     'payment_plan': f"{earliest_full}:{amt_str}",
                     'earliest_date_for_full_payment': earliest_full,
                     'spending_changes_needed': 'none',
-                    'decision_explanation': f"Pay {home_curr} {req_amt:,.2f} in full on {earliest_full}. Paying earlier would take the balance below the {home_curr} {min_keep:,.2f} minimum."
+                    'decision_explanation': (
+                        f"Pay {home_curr} {req_amt:,.2f} in full on {earliest_full}. "
+                        f"Paying earlier would take the balance below the {home_curr} {min_keep:,.2f} minimum."
+                    )
                 }
 
         # 6. Fallback: not_affordable
@@ -614,5 +633,8 @@ class FinancialAgent:
             'payment_plan': 'none',
             'earliest_date_for_full_payment': earliest_full if earliest_full and parse_date(earliest_full) <= completion_date else '',
             'spending_changes_needed': 'none',
-            'decision_explanation': f"Do not make this payment by {completion_date_str}. None of the available options keeps the {home_curr} {min_keep:,.2f} minimum protected."
+            'decision_explanation': (
+                f"Do not make this payment by {completion_date_str}. "
+                f"None of the available options keeps the {home_curr} {min_keep:,.2f} minimum protected."
+            )
         }
