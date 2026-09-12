@@ -44,6 +44,14 @@ def clean_amt_str(val):
         return f"{val:.2f}".rstrip('0').rstrip('.')
     return str(val)
 
+def format_curr_amt(val):
+    """Format currency values with thousands separators and without trailing .00 for whole numbers."""
+    if isinstance(val, (int, float)):
+        if abs(val - round(val)) < 1e-4:
+            return f"{int(round(val)):,}"
+        return f"{val:,.2f}".rstrip('0').rstrip('.')
+    return str(val)
+
 class FinancialAgent:
     def __init__(self, data_dir='dataset'):
         self.data_dir = data_dir
@@ -290,7 +298,6 @@ class FinancialAgent:
         # 4. Variable living categories (groceries, transport, dining)
         VARIABLE_CATEGORIES = {'groceries', 'transport', 'dining'}
         # Calculate recent monthly spending in each variable category
-        cat_monthly = defaultdict(list)
         for cat in VARIABLE_CATEGORIES:
             cat_evs = [e for e in evs if e['category'] == cat and e['status'] == 'settled' and e['direction'] == 'debit']
             if not cat_evs:
@@ -379,11 +386,14 @@ class FinancialAgent:
         if safe_today >= req_amt - 1e-4:
             return request_date_str
 
+        # Compute baseline trajectory once across the full search window (180 days)
+        _, daily_bals = self.simulate_balances(user_id, request_date_str, days=180)
+
         curr_dt = req_date + timedelta(days=1)
         window_end = req_date + timedelta(days=90)
         while curr_dt <= end_date:
-            _, daily_bals = self.simulate_balances(user_id, request_date_str, extra_payments={curr_dt: req_amt}, days=180)
-            min_in_window = min(daily_bals[d] for d in daily_bals if curr_dt <= d <= window_end)
+            # An extra payment on curr_dt reduces all daily balances from curr_dt onwards by req_amt
+            min_in_window = min(daily_bals[d] for d in daily_bals if curr_dt <= d <= window_end) - req_amt
             if min_in_window >= min_keep - 1e-4:
                 return format_date(curr_dt)
             curr_dt += timedelta(days=1)
@@ -413,13 +423,15 @@ class FinancialAgent:
         # 1. Affordable now
         if safe_to_pay >= req_amt - 1e-4 and 'full_payment' in allowed_methods:
             amt_formatted = clean_amt_str(req_amt)
+            disp_amt = format_curr_amt(req_amt)
+            disp_min = format_curr_amt(min_keep)
             explanation = (
-                f"Pay {home_curr} {req_amt:,.2f} today. "
-                f"This leaves at least {home_curr} {min_keep:,.2f} available over the next 90 days."
+                f"Pay {home_curr} {disp_amt} today. "
+                f"This leaves at least {home_curr} {disp_min} available over the next 90 days."
             )
             return {
                 'request_id': req_id,
-                'amount_safe_to_pay': safe_to_pay,
+                'amount_safe_to_pay': clean_amt_str(safe_to_pay),
                 'affordability_status': 'affordable_now',
                 'recommended_payment_method': 'full_payment',
                 'payment_plan': f"{req_date_str}:{amt_formatted}",
@@ -472,8 +484,8 @@ class FinancialAgent:
                         'option_id': 'change_full',
                         'status': 'affordable_with_plan',
                         'explanation': (
-                            f"{action_desc}, then pay {home_curr} {req_amt:,.2f} today. "
-                            f"This leaves at least {home_curr} {min_keep:,.2f} available."
+                            f"{action_desc}, then pay {home_curr} {format_curr_amt(req_amt)} today. "
+                            f"This leaves at least {home_curr} {format_curr_amt(min_keep)} available."
                         )
                     })
                     break
@@ -504,8 +516,8 @@ class FinancialAgent:
                                 'option_id': 'change_full',
                                 'status': 'affordable_with_plan',
                                 'explanation': (
-                                    f"Adjust flexible expenses, then pay {home_curr} {req_amt:,.2f} today. "
-                                    f"This leaves at least {home_curr} {min_keep:,.2f} available."
+                                    f"Adjust flexible expenses, then pay {home_curr} {format_curr_amt(req_amt)} today. "
+                                    f"This leaves at least {home_curr} {format_curr_amt(min_keep)} available."
                                 )
                             })
                             break
@@ -514,26 +526,28 @@ class FinancialAgent:
 
         # 3. Candidate: Partial payment
         if allows_partial and 'partial_payment' in allowed_methods and 0 < safe_to_pay < req_amt:
-            if earliest_full and parse_date(earliest_full) <= completion_date:
-                part1 = safe_to_pay
-                part2 = req_amt - safe_to_pay
-                p1_str = clean_amt_str(part1)
-                p2_str = clean_amt_str(part2)
-                candidate_plans.append({
-                    'method': 'partial_payment',
-                    'plan': f"{req_date_str}:{p1_str}|{earliest_full}:{p2_str}",
-                    'spending_changes': 'none',
-                    'total_paid': req_amt,
-                    'first_payment_date': req_date,
-                    'last_payment_date': parse_date(earliest_full),
-                    'num_payments': 2,
-                    'option_id': 'partial',
-                    'status': 'affordable_with_plan',
-                    'explanation': (
-                        f"Pay {home_curr} {part1:,.2f} today and the remaining {home_curr} {part2:,.2f} on {earliest_full}. "
-                        f"This completes the full request and keeps the {home_curr} {min_keep:,.2f} minimum protected."
-                    )
-                })
+            if earliest_full and earliest_full.strip():
+                earliest_dt = parse_date(earliest_full)
+                if earliest_dt and earliest_dt <= completion_date:
+                    part1 = safe_to_pay
+                    part2 = req_amt - safe_to_pay
+                    p1_str = clean_amt_str(part1)
+                    p2_str = clean_amt_str(part2)
+                    candidate_plans.append({
+                        'method': 'partial_payment',
+                        'plan': f"{req_date_str}:{p1_str}|{earliest_full}:{p2_str}",
+                        'spending_changes': 'none',
+                        'total_paid': req_amt,
+                        'first_payment_date': req_date,
+                        'last_payment_date': earliest_dt,
+                        'num_payments': 2,
+                        'option_id': 'partial',
+                        'status': 'affordable_with_plan',
+                        'explanation': (
+                            f"Pay {home_curr} {format_curr_amt(part1)} today and the remaining {home_curr} {format_curr_amt(part2)} on {earliest_full}. "
+                            f"This completes the full request and keeps the {home_curr} {format_curr_amt(min_keep)} minimum protected."
+                        )
+                    })
 
         # 4. Candidate: Installments
         if 'installments' in allowed_methods:
@@ -573,9 +587,9 @@ class FinancialAgent:
                         'option_id': opt['payment_option_id'],
                         'status': 'affordable_with_plan',
                         'explanation': (
-                            f"Use {num_p} installments of {home_curr} {p_amt:,.2f}, "
+                            f"Use {num_p} installments of {home_curr} {format_curr_amt(p_amt)}, "
                             f"starting {first_dt.strftime('%d %B %Y')}. "
-                            f"This leaves at least {home_curr} {min_keep:,.2f} available."
+                            f"This leaves at least {home_curr} {format_curr_amt(min_keep)} available."
                         )
                     })
 
@@ -596,7 +610,7 @@ class FinancialAgent:
             if best_plan['last_payment_date'] <= completion_date:
                 return {
                     'request_id': req_id,
-                    'amount_safe_to_pay': safe_to_pay,
+                    'amount_safe_to_pay': clean_amt_str(safe_to_pay),
                     'affordability_status': 'affordable_with_plan',
                     'recommended_payment_method': best_plan['method'],
                     'payment_plan': best_plan['plan'],
@@ -606,35 +620,41 @@ class FinancialAgent:
                 }
 
         # 5. Check affordable_later (wait)
-        if 'full_payment' in allowed_methods and earliest_full:
+        if 'full_payment' in allowed_methods and earliest_full and earliest_full.strip():
             earliest_dt = parse_date(earliest_full)
-            if earliest_dt <= completion_date:
+            if earliest_dt and earliest_dt <= completion_date:
                 amt_str = clean_amt_str(req_amt)
                 return {
                     'request_id': req_id,
-                    'amount_safe_to_pay': safe_to_pay,
+                    'amount_safe_to_pay': clean_amt_str(safe_to_pay),
                     'affordability_status': 'affordable_later',
                     'recommended_payment_method': 'wait',
                     'payment_plan': f"{earliest_full}:{amt_str}",
                     'earliest_date_for_full_payment': earliest_full,
                     'spending_changes_needed': 'none',
                     'decision_explanation': (
-                        f"Pay {home_curr} {req_amt:,.2f} in full on {earliest_full}. "
-                        f"Paying earlier would take the balance below the {home_curr} {min_keep:,.2f} minimum."
+                        f"Pay {home_curr} {format_curr_amt(req_amt)} in full on {earliest_full}. "
+                        f"Paying earlier would take the balance below the {home_curr} {format_curr_amt(min_keep)} minimum."
                     )
                 }
 
         # 6. Fallback: not_affordable
+        earliest_val = ''
+        if earliest_full and earliest_full.strip():
+            earliest_dt = parse_date(earliest_full)
+            if earliest_dt and earliest_dt <= completion_date:
+                earliest_val = earliest_full
+
         return {
             'request_id': req_id,
-            'amount_safe_to_pay': safe_to_pay,
+            'amount_safe_to_pay': clean_amt_str(safe_to_pay),
             'affordability_status': 'not_affordable',
             'recommended_payment_method': 'not_recommended',
             'payment_plan': 'none',
-            'earliest_date_for_full_payment': earliest_full if earliest_full and parse_date(earliest_full) <= completion_date else '',
+            'earliest_date_for_full_payment': earliest_val,
             'spending_changes_needed': 'none',
             'decision_explanation': (
                 f"Do not make this payment by {completion_date_str}. "
-                f"None of the available options keeps the {home_curr} {min_keep:,.2f} minimum protected."
+                f"None of the available options keeps the {home_curr} {format_curr_amt(min_keep)} minimum protected."
             )
         }

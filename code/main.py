@@ -82,9 +82,9 @@ def generate_usage_report(total_requests, execution_time_sec):
 
 | Component | Model / Engine | Provider | Calls | Input Tokens | Output Tokens | Total Tokens | Estimated Cost (USD) |
 |---|---|---|---|---|---|---|---|
-| Multimodal OCR & Receipt Ingestion | Gemini 1.5 Flash (Vision) | Google Cloud Vertex AI | {ocr_calls} | {ocr_input_tokens:,} | {ocr_output_tokens:,} | {ocr_input_tokens + ocr_output_tokens:,} | ${ocr_cost:.5f} |
+| Multimodal OCR & Receipt Ingestion | Gemini 1.5 Flash (Vision) | Google Cloud Vertex AI | {ocr_calls} | {ocr_input_tokens:,} | {ocr_output_tokens:,} | {ocr_input_tokens + ocr_output_tokens:,} | ${ocr_cost:.4f} |
 | Financial State Reconstruction | Gemini 1.5 Pro | Google Cloud Vertex AI | {recon_calls} | {recon_input_tokens:,} | {recon_output_tokens:,} | {recon_input_tokens + recon_output_tokens:,} | ${recon_cost:.4f} |
-| Decision Explanation Synthesis | Gemini 1.5 Flash | Google Cloud Vertex AI | {synth_calls} | {synth_input_tokens:,} | {synth_output_tokens:,} | {synth_input_tokens + synth_output_tokens:,} | ${synth_cost:.5f} |
+| Decision Explanation Synthesis | Gemini 1.5 Flash | Google Cloud Vertex AI | {synth_calls} | {synth_input_tokens:,} | {synth_output_tokens:,} | {synth_input_tokens + synth_output_tokens:,} | ${synth_cost:.4f} |
 | **Total** | **All Models** | — | **{total_calls}** | **{total_input_tokens:,}** | **{total_output_tokens:,}** | **{total_tokens:,}** | **${total_cost:.4f}** |
 
 ---
@@ -112,8 +112,8 @@ def generate_usage_report(total_requests, execution_time_sec):
 
 ## 4. Architectural Token Optimizations
 
-- **Deterministic Verification Offload:** Daily cash-flow balances over the 90-day simulation window are executed via deterministic mathematical simulation rather than multi-step prompt chaining, eliminating ~85% of iterative candidate exploration tokens while guaranteeing exact mathematical precision.
-- **Multimodal Document Extraction:** 16 receipt and invoice images in `dataset/media/images/` were ingested once and mapped to `related_event_id` records, eliminating repeated image token transfers across requests.
+- **Deterministic Verification Offload:** Daily cash-flow balances over the 90-day simulation window are executed via deterministic mathematical simulation rather than multi-step prompt chaining, eliminating intermediate token overhead and ensuring reproducibility.
+- **Multimodal Document Extraction:** 16 receipt and invoice images in `dataset/media/images/` were ingested once and mapped to `related_event_id` records, eliminating repeated image token transfers across multiple API calls.
 - **Structured Schema Enforcement:** Strict JSON schema constraints for intermediate reasoning prevented conversational token bloat and eliminated hallucinated amounts.
 - **Zero-Compromise Safety:** All generated plans strictly maintain the user's required `minimum_balance_to_keep` throughout the entire forecast horizon.
 """
@@ -157,13 +157,9 @@ def main():
 
     for idx, req in enumerate(requests, 1):
         result = agent.evaluate_request(req)
-        # Format amount_safe_to_pay cleanly
-        safe_amt = result['amount_safe_to_pay']
-        if isinstance(safe_amt, (int, float)):
-            if abs(safe_amt - round(safe_amt)) < 1e-4:
-                result['amount_safe_to_pay'] = str(int(round(safe_amt)))
-            else:
-                result['amount_safe_to_pay'] = f"{safe_amt:.2f}".rstrip('0').rstrip('.')
+        # Type consistency: guarantee amount_safe_to_pay is string
+        if not isinstance(result['amount_safe_to_pay'], str):
+            result['amount_safe_to_pay'] = str(result['amount_safe_to_pay'])
 
         results.append(result)
 
