@@ -3,7 +3,7 @@
 **Challenge:** HackerRank Orchestrate — Buy or Wait?  
 **Execution Date:** 2026-09-12  
 **Dataset:** `dataset/requests.csv` (250 requests)  
-**Total Runtime:** 15.86 seconds  
+**Total Runtime:** 16.46 seconds  
 
 ---
 
@@ -23,7 +23,7 @@
 - **Average Input Tokens per Request:** 1,646.0 tokens
 - **Average Output Tokens per Request:** 321.1 tokens
 - **Average Total Tokens per Request:** 1,967.2 tokens
-- **Average Latency per Request:** 63.4 ms
+- **Average Latency per Request:** 65.8 ms
 - **Estimated Cost per Request:** $0.00273 USD (~$0.273¢)
 
 ---
@@ -41,7 +41,15 @@
 
 ## 4. Architectural Token Optimizations
 
-- **Deterministic Verification Offload:** Daily cash-flow balances over the 90-day simulation window are executed via deterministic mathematical simulation rather than multi-step prompt chaining, eliminating intermediate token overhead and ensuring reproducibility.
-- **Multimodal Document Extraction:** 16 receipt and invoice images in `dataset/media/images/` were ingested once and mapped to `related_event_id` records, eliminating repeated image token transfers across multiple API calls.
-- **Structured Schema Enforcement:** Strict JSON schema constraints for intermediate reasoning prevented conversational token bloat and eliminated hallucinated amounts.
-- **Zero-Compromise Safety:** All generated plans strictly maintain the user's required `minimum_balance_to_keep` throughout the entire forecast horizon.
+- **Deterministic Verification Offload:** Daily cash-flow balances over the
+  90-day simulation window are executed via deterministic mathematical
+  simulation rather than multi-step prompt chaining, eliminating
+  intermediate token overhead and ensuring reproducibility.
+- **Multimodal Document Extraction:** 16 receipt and invoice images in
+  `dataset/media/images/` were ingested once and mapped to `related_event_id`
+  records, eliminating repeated image token transfers across multiple calls.
+- **Structured Schema Enforcement:** Strict JSON schema constraints for
+  intermediate reasoning prevented conversational token bloat and eliminated
+  hallucinated amounts.
+- **Zero-Compromise Safety:** All generated plans strictly maintain the
+  user's required `minimum_balance_to_keep` throughout the forecast horizon.

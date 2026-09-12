@@ -43,31 +43,82 @@ def generate_usage_report(total_requests, execution_time_sec):
     #    Pricing: $0.075 / 1M input tokens, $0.30 / 1M output tokens
 
     ocr_calls = 16
-    ocr_input_tokens = 21504    # ~1,024 vision patch tokens + 320 prompt tokens per receipt
-    ocr_output_tokens = 1536    # ~96 tokens per receipt (extracted structured JSON)
-    ocr_cost = (ocr_input_tokens * 0.075 / 1_000_000) + (ocr_output_tokens * 0.30 / 1_000_000)
+    ocr_input = 21504    # ~1,024 vision patch tokens + 320 prompt tokens per receipt
+    ocr_output = 1536    # ~96 tokens per receipt (extracted structured JSON)
+    ocr_tot = ocr_input + ocr_output
+    ocr_cost = (ocr_input * 0.075 / 1_000_000) + (ocr_output * 0.30 / 1_000_000)
 
     recon_calls = total_requests
-    recon_input_tokens = total_requests * 1180   # User profile + ~35-50 windowed financial events + FX rates + options
-    recon_output_tokens = total_requests * 240   # Structured financial trajectory + candidates
-    recon_cost = (recon_input_tokens * 1.25 / 1_000_000) + (recon_output_tokens * 5.00 / 1_000_000)
+    recon_input = total_requests * 1180   # User profile + ~35-50 events + FX + options
+    recon_output = total_requests * 240   # Structured financial trajectory + candidates
+    recon_tot = recon_input + recon_output
+    recon_cost = (recon_input * 1.25 / 1_000_000) + (recon_output * 5.00 / 1_000_000)
 
     synth_calls = total_requests
-    synth_input_tokens = total_requests * 380    # Candidate plan + constraints + user persona
-    synth_output_tokens = total_requests * 75    # Concise decision explanation string
-    synth_cost = (synth_input_tokens * 0.075 / 1_000_000) + (synth_output_tokens * 0.30 / 1_000_000)
+    synth_input = total_requests * 380    # Candidate plan + constraints + user persona
+    synth_output = total_requests * 75    # Concise decision explanation string
+    synth_tot = synth_input + synth_output
+    synth_cost = (synth_input * 0.075 / 1_000_000) + (synth_output * 0.30 / 1_000_000)
 
     total_calls = ocr_calls + recon_calls + synth_calls
-    total_input_tokens = ocr_input_tokens + recon_input_tokens + synth_input_tokens
-    total_output_tokens = ocr_output_tokens + recon_output_tokens + synth_output_tokens
-    total_tokens = total_input_tokens + total_output_tokens
+    total_input = ocr_input + recon_input + synth_input
+    total_output = ocr_output + recon_output + synth_output
+    total_tokens = total_input + total_output
     total_cost = ocr_cost + recon_cost + synth_cost
 
-    avg_input_tokens = total_input_tokens / total_requests
-    avg_output_tokens = total_output_tokens / total_requests
+    avg_input_tokens = total_input / total_requests
+    avg_output_tokens = total_output / total_requests
     avg_total_tokens = total_tokens / total_requests
     avg_cost_per_req = total_cost / total_requests
     avg_latency_ms = (execution_time_sec / total_requests) * 1000
+
+    # Format table rows cleanly with short line lengths in source code
+    tbl_hdr = (
+        "| Component | Model / Engine | Provider | Calls | Input Tokens "
+        "| Output Tokens | Total Tokens | Estimated Cost (USD) |\n"
+        "|---|---|---|---|---|---|---|---|"
+    )
+    row_ocr = (
+        f"| Multimodal OCR & Receipt Ingestion | Gemini 1.5 Flash (Vision) "
+        f"| Google Cloud Vertex AI | {ocr_calls} | {ocr_input:,} | {ocr_output:,} "
+        f"| {ocr_tot:,} | ${ocr_cost:.4f} |"
+    )
+    row_recon = (
+        f"| Financial State Reconstruction | Gemini 1.5 Pro "
+        f"| Google Cloud Vertex AI | {recon_calls} | {recon_input:,} | {recon_output:,} "
+        f"| {recon_tot:,} | ${recon_cost:.4f} |"
+    )
+    row_synth = (
+        f"| Decision Explanation Synthesis | Gemini 1.5 Flash "
+        f"| Google Cloud Vertex AI | {synth_calls} | {synth_input:,} | {synth_output:,} "
+        f"| {synth_tot:,} | ${synth_cost:.4f} |"
+    )
+    row_total = (
+        f"| **Total** | **All Models** | — | **{total_calls}** | **{total_input:,}** "
+        f"| **{total_output:,}** | **{total_tokens:,}** | **${total_cost:.4f}** |"
+    )
+
+    # Format optimization descriptions with clean line wrapping
+    opt1 = (
+        "- **Deterministic Verification Offload:** Daily cash-flow balances over the\n"
+        "  90-day simulation window are executed via deterministic mathematical\n"
+        "  simulation rather than multi-step prompt chaining, eliminating\n"
+        "  intermediate token overhead and ensuring reproducibility."
+    )
+    opt2 = (
+        "- **Multimodal Document Extraction:** 16 receipt and invoice images in\n"
+        "  `dataset/media/images/` were ingested once and mapped to `related_event_id`\n"
+        "  records, eliminating repeated image token transfers across multiple calls."
+    )
+    opt3 = (
+        "- **Structured Schema Enforcement:** Strict JSON schema constraints for\n"
+        "  intermediate reasoning prevented conversational token bloat and eliminated\n"
+        "  hallucinated amounts."
+    )
+    opt4 = (
+        "- **Zero-Compromise Safety:** All generated plans strictly maintain the\n"
+        "  user's required `minimum_balance_to_keep` throughout the forecast horizon."
+    )
 
     report_content = f"""# Token Usage and Cost Analysis Report
 
@@ -80,12 +131,11 @@ def generate_usage_report(total_requests, execution_time_sec):
 
 ## 1. Model Summary & Provider Breakdown
 
-| Component | Model / Engine | Provider | Calls | Input Tokens | Output Tokens | Total Tokens | Estimated Cost (USD) |
-|---|---|---|---|---|---|---|---|
-| Multimodal OCR & Receipt Ingestion | Gemini 1.5 Flash (Vision) | Google Cloud Vertex AI | {ocr_calls} | {ocr_input_tokens:,} | {ocr_output_tokens:,} | {ocr_input_tokens + ocr_output_tokens:,} | ${ocr_cost:.4f} |
-| Financial State Reconstruction | Gemini 1.5 Pro | Google Cloud Vertex AI | {recon_calls} | {recon_input_tokens:,} | {recon_output_tokens:,} | {recon_input_tokens + recon_output_tokens:,} | ${recon_cost:.4f} |
-| Decision Explanation Synthesis | Gemini 1.5 Flash | Google Cloud Vertex AI | {synth_calls} | {synth_input_tokens:,} | {synth_output_tokens:,} | {synth_input_tokens + synth_output_tokens:,} | ${synth_cost:.4f} |
-| **Total** | **All Models** | — | **{total_calls}** | **{total_input_tokens:,}** | **{total_output_tokens:,}** | **{total_tokens:,}** | **${total_cost:.4f}** |
+{tbl_hdr}
+{row_ocr}
+{row_recon}
+{row_synth}
+{row_total}
 
 ---
 
@@ -112,10 +162,10 @@ def generate_usage_report(total_requests, execution_time_sec):
 
 ## 4. Architectural Token Optimizations
 
-- **Deterministic Verification Offload:** Daily cash-flow balances over the 90-day simulation window are executed via deterministic mathematical simulation rather than multi-step prompt chaining, eliminating intermediate token overhead and ensuring reproducibility.
-- **Multimodal Document Extraction:** 16 receipt and invoice images in `dataset/media/images/` were ingested once and mapped to `related_event_id` records, eliminating repeated image token transfers across multiple API calls.
-- **Structured Schema Enforcement:** Strict JSON schema constraints for intermediate reasoning prevented conversational token bloat and eliminated hallucinated amounts.
-- **Zero-Compromise Safety:** All generated plans strictly maintain the user's required `minimum_balance_to_keep` throughout the entire forecast horizon.
+{opt1}
+{opt2}
+{opt3}
+{opt4}
 """
 
     # Write to root evaluation/ directory
@@ -165,7 +215,8 @@ def main():
 
         if idx % 50 == 0 or idx == total_requests:
             elapsed = time.time() - start_time
-            print(f"      Processed {idx}/{total_requests} requests ({idx/total_requests*100:.1f}%) in {elapsed:.2f}s")
+            pct = idx / total_requests * 100
+            print(f"      Processed {idx}/{total_requests} ({pct:.0f}%) in {elapsed:.2f}s")
 
     execution_time = time.time() - start_time
 
@@ -180,10 +231,11 @@ def main():
     # Generate token & cost analysis report
     generate_usage_report(total_requests, execution_time)
 
+    avg_ms = execution_time / total_requests * 1000
     print("\n" + "=" * 70)
     print(f"COMPLETE: Generated {len(results)} predictions in output.csv")
-    print(f"Total Runtime: {execution_time:.2f}s | Avg per request: {execution_time/total_requests*1000:.1f}ms")
-    print(f"Usage report generated at evaluation/usage_report.md")
+    print(f"Total Runtime: {execution_time:.2f}s | Avg per request: {avg_ms:.1f}ms")
+    print("Usage report generated at evaluation/usage_report.md")
     print("=" * 70)
 
 if __name__ == '__main__':
