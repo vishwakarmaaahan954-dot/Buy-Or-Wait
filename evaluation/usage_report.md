@@ -3,7 +3,7 @@
 **Challenge:** HackerRank Orchestrate — Buy or Wait?  
 **Execution Date:** 2026-09-12  
 **Dataset:** `dataset/requests.csv` (250 requests)  
-**Total Runtime:** 16.46 seconds  
+**Total Runtime:** 26.99 seconds  
 
 ---
 
@@ -23,7 +23,7 @@
 - **Average Input Tokens per Request:** 1,646.0 tokens
 - **Average Output Tokens per Request:** 321.1 tokens
 - **Average Total Tokens per Request:** 1,967.2 tokens
-- **Average Latency per Request:** 65.8 ms
+- **Average Latency per Request:** 108.0 ms
 - **Estimated Cost per Request:** $0.00273 USD (~$0.273¢)
 
 ---
